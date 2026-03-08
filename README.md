@@ -24,4 +24,15 @@ rpi pin 6 -> connector pin 2
 rpi pin 3 -> connector pin 3
 rpi pin 5 -> connector pin 4
 
-
+cables to connect motor and driver:
+!! 100uF capacitor between positive and ground rail !!
+rpi pin 6 - > ground rail
+rpi pin 1  -> DRV8825 pin 6 (sleep) & DRV8825 pin 5 (reset)
+rpi pin 11 -> DRV8825 pin 7 (step)
+rpi pin 13 -> DRV8825 pin 8 (dir)
+rpi pin 18 -> DRV8825 pin 1 (enable)
+DRV8825 pin 1 & 2 & 3 (m0, m1, m2) -> ground rail (reconfigure for higher reolution than full step)
+DRV8825 pin 16 -> positive terminal power supply
+DRV8825 pin 15 & 9 -> ground rail
+DRV8825 pin 13 & 14 -> motor coil 1
+DRV8825 pin 11 & 12 -> motor coil 2s
