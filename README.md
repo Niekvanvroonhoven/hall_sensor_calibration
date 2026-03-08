@@ -9,14 +9,14 @@ If this is not the case, then the position will be adjusted, and checked the nex
 
 ###################
 Hall sensors:
-1: Hall sensor soldered poorly, not working 
-2: connects to i2c, 81% is max reading
-3: connects to i2c, 81% is max reading
-4: no hall sensor
-5: pootje niet vast
-6:
-7:
-8:
+1: Not soldered correctly, creating short
+2: Connects to i2c, 81% is max reading
+3: Connects to i2c, 81% is max reading
+4: No hall sensor
+5: Not soldereed correctly, missing one connection
+6: Doesnt connect to i2c
+7: Connects to i2c, 81% is max reading
+8: Connects to 12c, 84% is max reading
 
 cables to connect hall sensor :
 rpi pin 1 -> connector pin 1 (left)
