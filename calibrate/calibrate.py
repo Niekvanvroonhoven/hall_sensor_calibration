@@ -31,7 +31,6 @@ def one_cycle(degree_per_measure, motor, sensor, rps):
         #time.sleep(0.01)  
         motor.rotate(degree_per_measure, rps)  #rotate the motor by degree_per_measure
  
-    plot_field_array(field_array) #plotting the field_array to find the max field and corresponding angle
     return field_array
 
 def rotate_to_max(motor, field_array, degrees_per_measure):
@@ -47,10 +46,12 @@ def main():
     motor.set_resolution(32) #set microstepping to 1/32 for more precision
     sensor.write_control(0b00001000) #enable auto measurement
     sensor.write_data_rate(0b00000110) #set data rate to 100Hz
-    degree_per_measure = 360/800
+    print(sensor.read_data_rate())
+    degree_per_measure = 360/(200 * 4)  
     field_array = one_cycle(degree_per_measure, motor, sensor, rps=1)
     rotate_to_max(motor, field_array, degree_per_measure)
     motor.shutdown()
+    plot_field_array(field_array) #plotting the field_array to find the max field and corresponding angle
 
 if __name__ == "__main__":
     main()
