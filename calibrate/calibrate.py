@@ -1,6 +1,8 @@
-from hall_sensor import I2C_UI
+from hall_sensor import sensor_functions as sf
+from motor_control import motor_control as mc
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 def plot_field_array(field_array):
     '''
@@ -16,26 +18,30 @@ def plot_field_array(field_array):
     plt.show()
 
 
-def one_cycle(degree_per_measure):
+def one_cycle(degree_per_measure, motor, sensor):
     '''
     Documentation:
     05-03-26: Created function - Niek van Vroonhoven
     '''
-    nsamples = 360/degree_per_measure
-    field_array = np.array(nsamples)
+    nsamples = int(360/degree_per_measure)
+    field_array = np.zeros(nsamples)
+    RPS = 0.1
 
     for i in range(nsamples):
-        field_array[i] = read_hall_sensor() #TODO: Create a reading function from the i2cUI
+        field_array[i], _ = sensor.read_measurement()
+        time.sleep(0.01)  
+        motor.rotate(degree_per_measure, RPS)  #rotate the motor by degree_per_measure
+ 
+    plot_field_array(field_array) #plotting the field_array to find the max field and corresponding angle
+    
+def main():
+    motor = mc.StepperMotor()
+    sensor = sf.HallSensor()
+    sensor.write_control(0b00001000)
+    print(sensor.read_control())
+    degree_per_measure = 360/200
+    one_cycle(degree_per_measure, motor, sensor)
+    motor.shutdown()
 
-        #rotate the motor by degree_per_measure
-        rotate_motor(degree_per_measure) #TODO: Create a function to rotate the motor by a certain degree
-    
-    #plotting the field_array to find the max field and corresponding angle
-    plot_field_array(field_array) #TODO: Create a function to plot the field array and find the max field and corresponding angle
-    
-def rotate_motor(degree):
-    '''
-    Documentation:
-    05-03-26: Created function - Niek van Vroonhoven
-    '''
-    
+if __name__ == "__main__":
+    main()

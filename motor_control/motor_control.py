@@ -61,7 +61,7 @@ def main():
 
     motor.rotate(720, 3)
     time.sleep(1)
-    motor.rotate(-180, 3)
+    motor.rotate(-180, 1)
 
     motor.shutdown()
 

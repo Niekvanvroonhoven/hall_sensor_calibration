@@ -70,7 +70,6 @@ class HallSensor:
         data = self.read_register(self.REG_OUT_M)
         if data is None:
             return None, None
-
         percentage = round((data // 4) * 25 / 16)
         return data, percentage
 
