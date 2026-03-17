@@ -32,7 +32,15 @@ def one_cycle(degree_per_measure, motor, sensor, rps):
         motor.rotate(degree_per_measure, rps)  #rotate the motor by degree_per_measure
  
     plot_field_array(field_array) #plotting the field_array to find the max field and corresponding angle
-    
+    return field_array
+
+def rotate_to_max(motor, field_array, degrees_per_measure):
+    '''found the angle where the maximum occurs, now move the motor there'''
+    max_index = np.argmax(field_array)
+    max_angle = max_index * degrees_per_measure
+    motor.rotate_to_angle(max_angle, rps=1) #rotating the motor to the angle where the maximum field occurs
+    motor.set_zero_postion() #setting the zero position to the angle where the maximum field occurs
+
 def main():
     motor = mc.StepperMotor()
     sensor = sf.HallSensor()
@@ -40,7 +48,8 @@ def main():
     sensor.write_control(0b00001000) #enable auto measurement
     sensor.write_data_rate(0b00000110) #set data rate to 100Hz
     degree_per_measure = 360/800
-    one_cycle(degree_per_measure, motor, sensor, rps=1)
+    field_array = one_cycle(degree_per_measure, motor, sensor, rps=1)
+    rotate_to_max(motor, field_array, degree_per_measure)
     motor.shutdown()
 
 if __name__ == "__main__":

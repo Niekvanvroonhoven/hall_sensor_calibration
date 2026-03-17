@@ -23,6 +23,7 @@ class StepperMotor:
         self.base_steps_per_rev = base_steps_per_rev
         self.steps_per_rev = base_steps_per_rev
         self.set_resolution(1)    # default to full step
+        self.angle = 0
 
     def set_resolution(self, mode):
         """
@@ -91,6 +92,7 @@ class StepperMotor:
             time.sleep(delay)
             self.step.set_value(0)
             time.sleep(delay)
+        self.angle += (degrees if self.direction.get_value() == 1 else -degrees) % 360
 
     def shutdown(self):
         time.sleep(1)
@@ -103,6 +105,16 @@ class StepperMotor:
         self.m1.release()
         self.m2.release()
 
+    def rotate_to_angle(self, target_angle, rps):
+        '''
+        Rotate to a specific angle (relative to zero position)
+        '''
+        relative_angle = target_angle - self.angle
+        move_angle = (relative_angle + 180) % 360 - 180
+        self.rotate(move_angle, rps)
+
+    def set_zero_postion(self):
+        self.angle = 0
 
 def main():
     motor = StepperMotor()
