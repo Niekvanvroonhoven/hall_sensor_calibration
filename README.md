@@ -31,7 +31,9 @@ rpi pin 1  -> DRV8825 pin 6 (sleep) & DRV8825 pin 5 (reset)
 rpi pin 11 -> DRV8825 pin 7 (step)
 rpi pin 13 -> DRV8825 pin 8 (dir)
 rpi pin 18 -> DRV8825 pin 1 (enable)
-DRV8825 pin 2 & 3 & 4 (m0, m1, m2) -> ground rail (reconfigure for higher reolution than full step)
+rpi pin 40 -> DRV8825 pin 4 (m2)
+rpi pin 38 -> DRV8825 pin 3 (m1)
+rpi pin 36 -> DRV8825 pin 2 (m0)
 DRV8825 pin 16 -> positive terminal power supply
 DRV8825 pin 15 & 9 -> ground rail
 DRV8825 pin 13 & 14 -> motor coil 1

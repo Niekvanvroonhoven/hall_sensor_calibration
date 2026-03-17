@@ -2,20 +2,65 @@ import gpiod
 import time
 
 class StepperMotor:
-    def __init__(self, chip_name="gpiochip4", step_pin=17, dir_pin=27, enable_pin=24, steps_per_rev=200):
+    def __init__(self, chip_name="gpiochip4", step_pin=17, dir_pin=27, enable_pin=24, m0_pin=16, m1_pin=22, m2_pin=21, base_steps_per_rev=200):
         self.chip = gpiod.Chip(chip_name)
 
         self.step = self.chip.get_line(step_pin)
         self.direction = self.chip.get_line(dir_pin)
         self.enable = self.chip.get_line(enable_pin)
+        self.m0 = self.chip.get_line(m0_pin)
+        self.m1 = self.chip.get_line(m1_pin)
+        self.m2 = self.chip.get_line(m2_pin)
 
         self.step.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
         self.direction.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
         self.enable.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
-
+        self.m0.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
+        self.m1.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
+        self.m2.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
         self.enable.set_value(1)  # disabled initially
 
-        self.steps_per_rev = steps_per_rev
+        self.base_steps_per_rev = base_steps_per_rev
+        self.steps_per_rev = base_steps_per_rev
+        self.set_resolution(1)    # default to full step
+
+    def set_resolution(self, mode):
+        """
+        Set microstepping resolution.
+
+        mode : int
+            1 = full step, 2 = half step, 4 = quarter step, 8 = eighth step, 16 = sixteenth step, 32 = thirty-secondth step
+        """
+        if mode == 1:
+            self.m0.set_value(0)
+            self.m1.set_value(0)
+            self.m2.set_value(0)
+            self.steps_per_rev = self.base_steps_per_rev * 1
+        elif mode == 2:
+            self.m0.set_value(1)
+            self.m1.set_value(0)
+            self.m2.set_value(0)
+            self.steps_per_rev = self.base_steps_per_rev * 2
+        elif mode == 4:
+            self.m0.set_value(0)
+            self.m1.set_value(1)
+            self.m2.set_value(0)
+            self.steps_per_rev = self.base_steps_per_rev * 4
+        elif mode == 8:
+            self.m0.set_value(1)
+            self.m1.set_value(1)
+            self.m2.set_value(0)
+            self.steps_per_rev = self.base_steps_per_rev * 8
+        elif mode == 16:
+            self.m0.set_value(0)
+            self.m1.set_value(0)
+            self.m2.set_value(1)
+            self.steps_per_rev = self.base_steps_per_rev * 16
+        elif mode == 32:
+            self.m0.set_value(1)
+            self.m1.set_value(1)
+            self.m2.set_value(1)
+            self.steps_per_rev = self.base_steps_per_rev * 32
 
     def rotate(self, degrees, rps):
         """
@@ -54,6 +99,9 @@ class StepperMotor:
         self.step.release()
         self.direction.release()
         self.enable.release()
+        self.m0.release()
+        self.m1.release()
+        self.m2.release()
 
 
 def main():
