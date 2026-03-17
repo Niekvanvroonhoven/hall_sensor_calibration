@@ -39,7 +39,6 @@ def main():
     motor.set_resolution(32) #set microstepping to 1/32 for more precision
     sensor.write_control(0b00001000) #enable auto measurement
     sensor.write_data_rate(0b00000110) #set data rate to 100Hz
-    print(sensor.read_data_rate())
     degree_per_measure = 360/800
     one_cycle(degree_per_measure, motor, sensor, rps=1)
     motor.shutdown()
