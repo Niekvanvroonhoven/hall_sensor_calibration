@@ -10,7 +10,7 @@ If this is not the case, then the position will be adjusted, and checked the nex
 ###################
 Hall sensors:
 1: Not soldered correctly, creating short
-2: Connects to i2c, 81% is max reading
+2: Connects to i2c, 81% is max reading ---- Now fried...
 3: Connects to i2c, 81% is max reading
 4: No hall sensor
 5: Not soldereed correctly, missing one connection

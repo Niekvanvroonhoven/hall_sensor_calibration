@@ -13,6 +13,7 @@ REG_ASSERT_THRESH = 0x04
 REG_CLEAR_THRESH = 0x05
 REG_USER_ODR = 0x06
 REG_WHO_AM_I = 0x08
+REG_I2C_ADDR = 0x09
 
 REGISTERS_NAME = {REG_STATUS: "STATUS",
              REG_CONTROL: "CONTROL",
@@ -20,6 +21,8 @@ REGISTERS_NAME = {REG_STATUS: "STATUS",
              REG_ASSERT_THRESH: "ASSERT_THRESH",
              REG_CLEAR_THRESH: "CLEAR_TRESH",
              REG_USER_ODR: "DATA_RATE",
+            REG_WHO_AM_I: "WHO_AM_I",
+            REG_I2C_ADDR: "I2C_ADDR"
             }
 
 # --- I2C Handler ---
@@ -94,15 +97,17 @@ def user_read(handler):
                 4: REG_ASSERT_THRESH,
                 5: REG_CLEAR_THRESH,
                 6: REG_USER_ODR,
+                7: REG_WHO_AM_I,
+                8: REG_I2C_ADDR
             }
 
     text = ""
-    while text not in range(1, 8):
-        text = int(input(f"What register would you want to read? \n STATUS (1) \n CONTROL  (2) \n M_OUT (3) \n ASSERT_THRESH (4) \n CLEAR_TRESH (5) \n DATA_RATE (6) \n ALL_REGISTERS (7) "))
+    while text not in range(1, 9):
+        text = int(input(f"What register would you want to read? \n STATUS (1) \n CONTROL  (2) \n M_OUT (3) \n ASSERT_THRESH (4) \n CLEAR_TRESH (5) \n DATA_RATE (6) \n WHO_AM_I (7) \n I2C_ADDR (8) \n Read_All (9) "))
     delete_line(8)
 
-    if text == 7:
-        for i in range(1, 7):
+    if text == 9:
+        for i in range(1, 9):
             reg = REGISTERS[i]
             data = handler.read_byte(reg)
             print(f"The data in register {REGISTERS_NAME[reg]} is", format(data, "08b"))
@@ -130,11 +135,13 @@ def user_write(handler):
             4: REG_ASSERT_THRESH,
             5: REG_CLEAR_THRESH,
             6: REG_USER_ODR,
+            7: REG_WHO_AM_I,
+            8: REG_I2C_ADDR
         }
     
     text = ''
-    while text not in range(1, 7):
-        text = int(input(f"What register would you want to write to? \n STATUS (1) \n CONTROL  (2) \n M_OUT (3) \n ASSERT_THRESH (4) \n CLEAR_TRESH (5) \n DATA_RATE (6) "))
+    while text not in range(1, 9):
+        text = int(input(f"What register would you want to write to? \n STATUS (1) \n CONTROL  (2) \n M_OUT (3) \n ASSERT_THRESH (4) \n CLEAR_TRESH (5) \n DATA_RATE (6) \n WHO_AM_I (7) \n I2C_ADDR (8) "))
     delete_line(7)
 
     reg = REGISTERS[text]

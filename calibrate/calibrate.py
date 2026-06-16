@@ -15,6 +15,7 @@ def plot_field_array(field_array):
     plt.xlabel('Angle (degrees)')
     plt.ylabel('Magnetic Field Strength')
     plt.title('Magnetic Field Strength vs Angle')
+    plt.savefig('field_array_plot.pdf', dpi=600)
     plt.show()
 
 
@@ -43,12 +44,13 @@ def rotate_to_max(motor, field_array, degrees_per_measure):
 def main():
     motor = mc.StepperMotor()
     sensor = sf.HallSensor()
-    motor.set_resolution(32) #set microstepping to 1/32 for more precision
+    motor.set_resolution(4) 
+    print(motor.steps_per_rev)
     sensor.write_control(0b00001000) #enable auto measurement
     sensor.write_data_rate(0b00000110) #set data rate to 100Hz
     print(sensor.read_data_rate())
-    degree_per_measure = 360/(200 * 4)  
-    field_array = one_cycle(degree_per_measure, motor, sensor, rps=1)
+    degree_per_measure = 360/(200)  
+    field_array = one_cycle(degree_per_measure, motor, sensor, rps=1/2)
     rotate_to_max(motor, field_array, degree_per_measure)
     motor.shutdown()
     plot_field_array(field_array) #plotting the field_array to find the max field and corresponding angle
