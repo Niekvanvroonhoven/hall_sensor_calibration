@@ -1,12 +1,12 @@
 import math
 
 class CalibrationLogicProcessor:
-    def __init__(self, calibration_angle=0.0, max_history_length=100, peak_threshold=0.5, noise_window=5):
+    def __init__(self, calibration_angle=0.0, max_history_length=100, peak_threshold=0.5, peak_window_size=11):
         # 1. Memory for data and settings
         self.data_history = []
         self.max_history_length = max_history_length
         self.peak_threshold = peak_threshold
-        self.noise_window = noise_window
+        self.peak_window_size = peak_window_size + (peak_window_size + 1)%2
 
         # 2. Tracking angles
         self.calibration_angle = calibration_angle
@@ -14,82 +14,88 @@ class CalibrationLogicProcessor:
     def clear_history(self):
         self.data_history.clear()
 
-    def check_history_buffer(self):
-        #this is an internal function just to remove samples that are not needed
-        while self.data_history and self.data_history[0] < self.peak_threshold / 2:
-            self.data_history.pop(0)
-
-    def find_delta_angle(self):     #TODO rewrite this entire function  
-        total_required = self.noise_window + self.measurement_window - 1
-        if len(self.data_history) < total_required:
+       
+    def get_time_series_peaks(self):
+        if len(self.data_history) < self.peak_window_size:
             return None
 
-        # 1. Extract and smooth the recent data
-        smoothed_readings = []
-        corresponding_angles = []
-        
-        for i in range(self.measurement_window):
-            end_idx = len(self.data_history) - i
-            start_idx = end_idx - self.noise_window
-            
-            slice_to_average = self.data_history[start_idx:end_idx]
-            avg_sensor = sum(item['sensor'] for item in slice_to_average) / self.noise_window
-            angle = slice_to_average[-((self.noise_window)//2+1)]['angle'] # angle halfway the noise window
-            
-            smoothed_readings.insert(0, avg_sensor)
-            corresponding_angles.insert(0, angle)
+        peaks = []
 
-        # 2. Prevent False Positives: Did the motor change direction?
-        # We ensure the angles are moving continuously in one direction
-        is_increasing = corresponding_angles[0] < corresponding_angles[1]
-        for i in range(1, len(corresponding_angles) - 1):
-            current_increases = corresponding_angles[i] < corresponding_angles[i+1]
-            if current_increases != is_increasing:
-                # The motor reversed direction inside this window. Abort.
-                return None
+        for start_ind in range(len(self.data_history) - self.peak_window_size + 1):
+            window = self.data_history[start_ind:start_ind + self.peak_window_size]
 
-        # 3. Find the middle point of our evaluation window
-        mid_index = self.measurement_window // 2
-        mid_sensor_val = smoothed_readings[mid_index]
-        mid_angle_val = corresponding_angles[mid_index]
+            sensor_values = [x["sensor"] for x in window]
 
-        # 4. Check if it meets the criteria for a peak, so more then threshold
-        if (mid_sensor_val < self.peak_threshold):
+            center = self.peak_window_size // 2
+
+            if (
+                sensor_values[center] == max(sensor_values)
+                and min(sensor_values) >= self.peak_threshold
+            ):
+                peak_index = start_ind + center
+
+                peaks.append({
+                    "index": peak_index,
+                    "angle": self.data_history[peak_index]["angle"]
+                })
+
+        return peaks if peaks else None 
+
+
+    def find_delta_angle(self):
+        #this fucntion expects only one peak to be found
+        peaks = self.get_time_series_peaks()
+
+        if peaks is None:
             return None
-            
-        is_peak = True
-        for i, val in enumerate(smoothed_readings):
-            if i == mid_index:
+
+        for peak in peaks:
+            peak_idx = peak["index"]
+
+            # Need 2 samples before and after
+            if peak_idx < 2 or peak_idx >= len(self.data_history) - 2:
                 continue
-            # The middle point must be strictly greater than surrounding points
-            if val >= mid_sensor_val:
-                is_peak = False
-                break
-                
-        # 5. Calculate delta if a peak was verified
-        if is_peak:
-            raw_delta = self.calibration_angle - mid_angle_val
-            
-            # Shortest path calculation to handle 2 pi wrap around
-            delta_angle = (raw_delta + math.pi) % (2*math.pi) - math.pi
-            return delta_angle
-            
+
+            directions = [
+                self.data_history[i]["direction"]
+                for i in range(peak_idx - 2, peak_idx + 3)
+            ]
+
+            # Ignore if any direction is unknown
+            if None in directions:
+                continue
+
+            # Reject peak if direction changes inside window
+            if len(set(directions)) != 1:
+                continue
+
+            return peak["angle"]
+
+
         return None
 
+
     def process_messages(self, sensor_readout, predicted_angle):
-        #cleanup buffer if needed
-        self.check_history_buffer()
+        # Determine direction
+        direction = None
 
-        # Do not add the data when the array is already empty and the value is way less than the threshold
-        if (not self.data_history) and (sensor_readout < self.peak_threshold/2):
-            return {
-                "delta_angle": None
-            }
+        if self.data_history:
+            previous_angle = self.data_history[-1]["angle"]
 
-        # 1. Add new entry
+            # shortest signed angular difference
+            delta = (predicted_angle - previous_angle + 180) % 360 - 180
+
+            if delta > 0:
+                direction = "CCW"
+            elif delta < 0:
+                direction = "CW"
+            else:
+                direction = self.data_history[-1].get("direction")
+
         new_entry = {
-            'sensor': sensor_readout,
-            'angle': predicted_angle
+            "sensor": sensor_readout,
+            "angle": predicted_angle,
+            "direction": direction,
         }
 
         self.data_history.append(new_entry)
@@ -113,3 +119,52 @@ class CalibrationLogicProcessor:
         return {
             "delta_angle": None
         }
+    
+
+
+
+# ==========================================
+# TEST HARNESS
+# ==========================================
+def run_simulation():
+    # Initialize with a smaller window for quicker testing
+    processor = CalibrationLogicProcessor(peak_threshold=0.6, peak_window_size=5)
+    
+    print("Starting continuous calibration simulation...\n")
+    print(f"{'Step':<6} | {'Angle':<7} | {'Sensor':<7} | {'Direction':<10} | {'Result'}")
+    print("-" * 55)
+
+    # Simulate a mechanism rotating clockwise.
+    # Angles count down: 20, 15, 10, 5, 0, 355, 350...
+    target_peak_angle = 345
+    angles = [(20 - i) % 360 for i in range(125)]
+
+    for i, angle in enumerate(angles):
+        # Simulate an analog sensor that spikes cleanly at 'target_peak_angle'
+        angular_distance = min(abs(angle - target_peak_angle), 360 - abs(angle - target_peak_angle))
+        
+        # Create a bell-curve (Gaussian) shaped peak
+        if angular_distance == 0:
+            sensor_val = 0.95 # Peak
+        elif angular_distance <= 5:
+            sensor_val = 0.75 # Shoulders
+        elif angular_distance <= 10:
+            sensor_val = 0.40 # Base
+        else:
+            sensor_val = 0.10 # Noise floor
+
+        # Process the simulated message
+        result = processor.process_messages(sensor_val, angle)
+        
+        # Fetch the calculated direction for the console output
+        current_dir = processor.data_history[-1]["direction"] if processor.data_history else "None"
+
+        print(f"{i+1:<6} | {angle:>3}°   | {sensor_val:.3f}   | {str(current_dir):<10} | {result}")
+
+        # Break if calibration was successful
+        if result["delta_angle"] is not None:
+            print(f"\n✅ SUCCESS: Calibration triggered! True peak isolated at angle: {result['delta_angle']}°")
+            break
+
+if __name__ == "__main__":
+    run_simulation()
