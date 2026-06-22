@@ -1,4 +1,5 @@
 import math
+import random
 
 '''
 calling the process message function will return a message containing the delta angle, defined as the current physical motor angle minus the predicted motor angle
@@ -28,7 +29,9 @@ class CalibrationLogicProcessor:
 
         # check if all the values are above the threshold and the middle samle is the maximum
         if (sensor_values[center] == max(sensor_values)
-            and min(sensor_values) >= self.peak_threshold):
+            and min(sensor_values) >= self.peak_threshold
+            and sensor_values[center] > sensor_values[0]
+            and sensor_values[center] > sensor_values[-1]):
             return self.data_history[center]["angle"]
         else:
             return None
@@ -103,47 +106,124 @@ class CalibrationLogicProcessor:
 
 
 # ==========================================
-# TEST HARNESS
+# REALISTIC TEST HARNESS
 # ==========================================
-def run_simulation():
-    # Initialize with a smaller window for quicker testing
-    processor = CalibrationLogicProcessor(peak_threshold=0.6, history_buffer_size=5)
+
+def calculate_sensor_value(current_angle, real_peak_angle, noise_floor, snr_db, radius=10.0, gap=2.0):
+    """
+    Simulates a magnetic sensor reading based on spatial distance and field strength.
+    """
+    # 1. Calculate the shortest angular distance to the real peak
+    angular_dist = min(abs(current_angle - real_peak_angle), 360 - abs(current_angle - real_peak_angle))
+    angular_dist_rad = math.radians(angular_dist)
+
+    # 2. Calculate physical distance in space from sensor to target
+    # d^2 = gap^2 + 2 * radius^2 * (1 - cos(theta))
+    distance = math.sqrt(gap**2 + 2 * radius**2 * (1 - math.cos(angular_dist_rad)))
+
+    # 3. Calculate Magnetic Field Strength (~ 1/d^3 for dipole)
+    # Normalized so that field_strength = 1.0 when perfectly aligned (distance == gap)
+    field_strength = (gap / distance)**3
+
+    # 4. Apply Noise Floor (scale signal so peak is 1.0)
+    signal = field_strength * (1.0 - noise_floor) + noise_floor
+
+    # 5. Add Gaussian Noise based on SNR
+    # SNR(dB) = 20 * log10(Signal_Amplitude / Noise_Amplitude)
+    if snr_db < float('inf'):
+        sigma = 10 ** (-snr_db / 20.0)
+        noise = random.gauss(0, sigma)
+    else:
+        noise = 0.0
+
+    # Clip between 0 and 1.5 to simulate ADC limits with some headroom
+    return max(0.0, min(1.5, signal + noise))
+
+
+def run_realistic_simulation(real_peak_angle, movements, sampling_rate_hz=100, snr_db=40, noise_floor=0.1):
+    # Initialize processor with a larger window for realistic sampling rates
+    processor = CalibrationLogicProcessor(peak_threshold=0.6, history_buffer_size=11)
     
-    print("Starting continuous calibration simulation...\n")
-    print(f"{'Step':<6} | {'Angle':<7} | {'Sensor':<7} | {'Direction':<10} | {'Result'}")
+    print("=====================================================")
+    print(" STARTING REALISTIC CONTINUOUS CALIBRATION SIMULATION")
+    print("=====================================================")
+    print(f"Target Peak Angle : {real_peak_angle}°")
+    print(f"Sampling Rate     : {sampling_rate_hz} Hz")
+    print(f"SNR               : {snr_db} dB")
+    print(f"Noise Floor       : {noise_floor}")
     print("-" * 55)
 
-    # Simulate a mechanism rotating clockwise.
-    # Angles count down: 20, 15, 10, 5, 0, 355, 350...
-    target_peak_angle = 345
-    angles = [(20 - i) % 360 for i in range(125)]
+    dt = 1.0 / sampling_rate_hz
+    step_count = 0
 
-    for i, angle in enumerate(angles):
-        # Simulate an analog sensor that spikes cleanly at 'target_peak_angle'
-        angular_distance = min(abs(angle - target_peak_angle), 360 - abs(angle - target_peak_angle))
+    # Execute each movement in the array
+    for move_idx, (start_angle, end_angle, rpm) in enumerate(movements):
+        print(f"\n>>> MOVEMENT {move_idx + 1}: {start_angle}° to {end_angle}° at {rpm} RPM <<<")
+        print(f"{'Step':<6} | {'Angle':<7} | {'Sensor':<7} | {'Direction':<10} | {'Result'}")
         
-        # Create a bell-curve (Gaussian) shaped peak
-        if angular_distance == 0:
-            sensor_val = 0.95 # Peak
-        elif angular_distance <= 5:
-            sensor_val = 0.75 # Shoulders
-        elif angular_distance <= 10:
-            sensor_val = 0.40 # Base
+        if rpm == 0:
+            continue
+
+        # Per instructions: Positive RPM = CW (decreasing angle). Negative RPM = CCW (increasing angle)
+        is_cw = rpm > 0
+        deg_per_sec = abs(rpm) * 360.0 / 60.0
+        angular_step = deg_per_sec * dt
+
+        # Calculate total degrees to travel to know when to stop
+        if is_cw:
+            total_travel = (start_angle - end_angle) % 360
         else:
-            sensor_val = 0.10 # Noise floor
+            total_travel = (end_angle - start_angle) % 360
+            
+        if total_travel == 0:
+            total_travel = 360 # Full rotation if start == end
 
-        # Process the simulated message
-        result = processor.process_messages(sensor_val, angle)
-        
-        # Fetch the calculated direction for the console output
-        current_dir = processor.data_history[-1]["direction"] if processor.data_history else "None"
+        current_travel = 0.0
+        current_angle = start_angle
 
-        print(f"{i+1:<6} | {angle:>3}°   | {sensor_val:.3f}   | {str(current_dir):<10} | {result}")
+        # Run the time-step loop for this movement
+        while current_travel < total_travel:
+            # 1. Read Sensor
+            sensor_val = calculate_sensor_value(current_angle, real_peak_angle, noise_floor, snr_db)
 
-        # Break if calibration was successful
-        if result["delta_angle"] is not None:
-            print(f"\n✅ SUCCESS: Calibration triggered! True peak isolated at angle: {result['delta_angle']}°")
-            break
+            # 2. Process
+            result = processor.process_messages(sensor_val, current_angle)
+            current_dir = processor.data_history[-1]["direction"] if processor.data_history else "None"
+
+            # 3. Print Output (throttle terminal spam by printing every Nth step or if peak found)
+            if step_count % max(1, int(sampling_rate_hz / 10)) == 0 or result["delta_angle"] is not None:
+                print(f"{step_count:<6} | {current_angle:>6.1f}° | {sensor_val:.3f}   | {str(current_dir):<10} | {result}")
+
+            if result["delta_angle"] is not None:
+                print(f"\n✅ SUCCESS: Calibration triggered! True peak isolated at angle: {result['delta_angle']}°")
+                # We don't break the loop here so you can see it continue and trigger again if it crosses the peak twice!
+
+            # 4. Advance physics state
+            if is_cw:
+                current_angle = (current_angle - angular_step) % 360
+            else:
+                current_angle = (current_angle + angular_step) % 360
+
+            current_travel += angular_step
+            step_count += 1
 
 if __name__ == "__main__":
-    run_simulation()
+    # Configuration
+    REAL_PEAK = 180.0
+    
+    # Array of tuples: (start_angle, end_angle, rpm)
+    # Movement 1: CW from 200 down past 180 to 90
+    # Movement 2: CCW from 90 up past 180 to 200
+    MOVEMENTS = [
+        (200, 90, 30),   # +30 RPM = Clockwise
+        (90, 200, -30)   # -30 RPM = Counter-Clockwise
+    ]
+
+    # Try tweaking the SNR down to 20dB to see how noise affects the logic!
+    run_realistic_simulation(
+        real_peak_angle=REAL_PEAK, 
+        movements=MOVEMENTS, 
+        sampling_rate_hz=1_000, 
+        snr_db=30,          # High SNR for a clean signal
+        noise_floor=0.1
+    )
