@@ -40,7 +40,7 @@ class CalibrationLogicProcessor:
             for i in range(1, len(self.data_history))
         ]
 
-        if (None in directions) or (len(set(directions)) != 1):
+        if (None in directions) or (len(set(directions)) > 1):
             self.clear_history()
 
 
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     run_realistic_simulation(
         real_peak_angle=REAL_PEAK, 
         movements=MOVEMENTS, 
-        sampling_rate_hz=1_000, 
+        sampling_rate_hz=500, 
         snr_db=30,          # High SNR for a clean signal
         noise_floor=0.1
     )
