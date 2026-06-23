@@ -6,10 +6,10 @@ calling the process message function will return a message containing the delta 
 '''
 
 class CalibrationLogicProcessor:
-    def __init__(self, calibration_angle=0.0, history_buffer_size=11, peak_threshold=0.5):
+    def __init__(self, calibration_angle=0.0, history_size=11, peak_threshold=0.5):
         # 1. Memory for data and settings
         self.data_history = []
-        self.history_buffer_size = history_buffer_size + (history_buffer_size +1)%2 #make the window odd sized so it has a center
+        self.history_size = history_size + (history_size +1)%2 #make the window odd sized so it has a center
         self.peak_threshold = peak_threshold
 
         # 2. Tracking angles
@@ -18,14 +18,40 @@ class CalibrationLogicProcessor:
     def clear_history(self):
         self.data_history.clear()
 
-       
+    def get_direction(self, predicted_angle):
+        if not self.data_history:
+            return None
+
+        previous_angle = self.data_history[-1]["angle"]
+        # shortest signed angular difference
+        delta = (predicted_angle - previous_angle + 180) % 360 - 180
+
+        if delta > 0:
+            return "CCW"
+        elif delta < 0:
+            return "CW"
+        else:
+            return None
+        
+    def check_change_direction(self):
+        #clears buffer when we have a change in direction
+        directions = [
+            self.data_history[i]["direction"]
+            for i in range(1, len(self.data_history))
+        ]
+
+        if (None in directions) or (len(set(directions)) != 1):
+            self.clear_history()
+
+
+     
     def check_if_peak(self):
-        if len(self.data_history) < self.history_buffer_size:
+        if len(self.data_history) < self.history_size:
             return None
         
         # extract sensor values
         sensor_values = [x["sensor"] for x in self.data_history]
-        center = self.history_buffer_size // 2
+        center = self.history_size // 2
 
         # check if all the values are above the threshold and the middle samle is the maximum
         if (sensor_values[center] == max(sensor_values)
@@ -37,43 +63,19 @@ class CalibrationLogicProcessor:
             return None
 
 
-    def find_delta_angle(self):
-        #if the buffer is not full we dont have a peak
-        if len(self.data_history) < self.history_buffer_size:
-            return None
-        
-        #check if we have a peak
+    def find_delta_angle(self):    
+        #check if we have a peak and return the delta angle
         peak_angle = self.check_if_peak()
 
-        directions = [
-            self.data_history[i]["direction"]
-            for i in range(1, self.history_buffer_size)
-        ]
-
-        # there must be a peak AND the directions must be the same and not None
-        if (None in directions) or (peak_angle is None) or (len(set(directions)) != 1):
+        if peak_angle == None:
             return None
-
-        return self.calibration_angle - peak_angle
+        else:
+            return self.calibration_angle - peak_angle
 
 
     def process_messages(self, sensor_readout, predicted_angle):
-        # Determine direction
-        direction = None
 
-        if self.data_history:
-            previous_angle = self.data_history[-1]["angle"]
-
-            # shortest signed angular difference
-            delta = (predicted_angle - previous_angle + 180) % 360 - 180
-
-            if delta > 0:
-                direction = "CCW"
-            elif delta < 0:
-                direction = "CW"
-            else:
-                direction = self.data_history[-1].get("direction")
-
+        direction = self.get_direction(predicted_angle)
         new_entry = {
             "sensor": sensor_readout,
             "angle": predicted_angle,
@@ -82,8 +84,11 @@ class CalibrationLogicProcessor:
 
         self.data_history.append(new_entry)
 
-        if len(self.data_history) > self.history_buffer_size:
+        if len(self.data_history) > self.history_size:
             self.data_history.pop(0)
+
+        #clears buffer when we have a change in direction
+        self.check_change_direction()
 
         # 3. Attempt to find a new delta angle 
         calculated_delta = self.find_delta_angle()
@@ -142,7 +147,7 @@ def calculate_sensor_value(current_angle, real_peak_angle, noise_floor, snr_db, 
 
 def run_realistic_simulation(real_peak_angle, movements, sampling_rate_hz=100, snr_db=40, noise_floor=0.1):
     # Initialize processor with a larger window for realistic sampling rates
-    processor = CalibrationLogicProcessor(peak_threshold=0.6, history_buffer_size=11)
+    processor = CalibrationLogicProcessor(peak_threshold=0.6, history_size=11)
     
     print("=====================================================")
     print(" STARTING REALISTIC CONTINUOUS CALIBRATION SIMULATION")
